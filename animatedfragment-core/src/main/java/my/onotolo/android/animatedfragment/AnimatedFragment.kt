@@ -15,25 +15,35 @@ typealias HeightCounter = () -> Float
 
 abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
-    enum class Animation {
+    protected val animation = AnimationConfiguration()
+
+    enum class AnimationType {
         SlideFromTop, SlideFromBottom, AlphaAnimation
     }
 
-    protected val animatedViews = WeakHashMap<View?, Animation>()
+    class AnimationConfiguration internal constructor() {
+        val animatedViews = WeakHashMap<View?, AnimationType>()
+
+        var countTopSlideFixedOffset: HeightCounter? = null
+        var countBottomSlideFixedOffset: HeightCounter? = null
+
+        var animateOnBackButton = true
+
+        var defaultDuration: Long = 225
+        var defaultDelay: Long = 150
+    }
 
     abstract fun handleBackButtonEventAfterAnimation()
 
-    protected var countTopSlideFixedOffset: HeightCounter? = null
-    protected var countBottomSlideFixedOffset: HeightCounter? = null
-
-    protected fun animateVisibility(isVisible: Boolean,
-                                    duration: Long = 225,
-                                    delay: Long = 150,
+    protected open fun animateVisibility(isVisible: Boolean,
+                                    duration: Long = animation.defaultDuration,
+                                    delay: Long = animation.defaultDelay,
                                     endAction: () -> Unit = {}) {
         var endActionAttached = false
 
-        val bottomFixedOffset = countBottomSlideFixedOffset?.invoke()
-        val topFixedOffset = countTopSlideFixedOffset?.invoke()
+        val bottomFixedOffset = animation.countBottomSlideFixedOffset?.invoke()
+        val topFixedOffset = animation.countTopSlideFixedOffset?.invoke()
+
         val configureAnimator = { animator: ViewPropertyAnimator? ->
             animator?.apply {
 
@@ -44,7 +54,7 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
                     endActionAttached = true
                 }
                 this.interpolator = if (!isVisible) AccelerateInterpolator() else DecelerateInterpolator()
-                startDelay = if (isVisible) 0L else delay
+                startDelay = delay
             }?.start()
         }
         val slideFromTop = animate@{ view: View? ->
@@ -98,11 +108,11 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
             configureAnimator(view.animate()?.alpha(endValue))
         }
 
-        for ((view, position) in animatedViews) {
+        for ((view, position) in animation.animatedViews) {
             when (position) {
-                Animation.SlideFromTop -> slideFromTop(view)
-                Animation.SlideFromBottom -> slideFromBottom(view)
-                Animation.AlphaAnimation -> alphaAnimation(view)
+                AnimationType.SlideFromTop -> slideFromTop(view)
+                AnimationType.SlideFromBottom -> slideFromBottom(view)
+                AnimationType.AlphaAnimation -> alphaAnimation(view)
                 null -> {}
             }
         }
@@ -118,6 +128,9 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
     override fun onPause() {
         super.onPause()
+        if (!animation.animateOnBackButton)
+            return
+
         val activity = activity
         if (activity is BackButtonEventProvider
             && activity.backButtonListener == this) {
@@ -134,6 +147,9 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
     }
 
     override fun onBackButton(): Boolean {
+        if (!animation.animateOnBackButton)
+            return false
+
         animateVisibility(false, 175) {
             handleBackButtonEventAfterAnimation()
         }
