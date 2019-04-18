@@ -29,14 +29,20 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
         var animateOnBackButton = true
 
-        var defaultDuration: Long = 225
+        var delayOnStart = false
         var defaultDelay: Long = 150
+
+        val defaultAnimationsDurations: MutableMap<AnimationType, Long> = mutableMapOf(
+            AnimationType.AlphaAnimation to 300L,
+            AnimationType.SlideFromTop to 225L,
+            AnimationType.SlideFromBottom to 225L
+        )
     }
 
     abstract fun handleBackButtonEventAfterAnimation()
 
     protected open fun animateVisibility(isVisible: Boolean,
-                                    duration: Long = animation.defaultDuration,
+                                    durations: Map<AnimationType, Long>? = null,
                                     delay: Long = animation.defaultDelay,
                                     endAction: () -> Unit = {}) {
         var endActionAttached = false
@@ -44,7 +50,10 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
         val bottomFixedOffset = animation.countBottomSlideFixedOffset?.invoke()
         val topFixedOffset = animation.countTopSlideFixedOffset?.invoke()
 
-        val configureAnimator = { animator: ViewPropertyAnimator? ->
+        val configureAnimator = {
+                animator: ViewPropertyAnimator?,
+                duration: Long ->
+
             animator?.apply {
 
                 this.duration = duration
@@ -54,10 +63,10 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
                     endActionAttached = true
                 }
                 this.interpolator = if (!isVisible) AccelerateInterpolator() else DecelerateInterpolator()
-                startDelay = delay
+                startDelay = if (animation.delayOnStart || !isVisible) delay else 0
             }?.start()
         }
-        val slideFromTop = animate@{ view: View? ->
+        val slideFromTop = animate@{ view: View?, duration: Long ->
             if (view == null)
                 return@animate
 
@@ -73,9 +82,9 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
             view.translationY = startValue
 
-            configureAnimator(view.animate()?.translationY(endValue))
+            configureAnimator(view.animate()?.translationY(endValue), duration)
         }
-        val slideFromBottom = animate@{ view: View? ->
+        val slideFromBottom = animate@{ view: View?, duration: Long ->
             if (view == null)
                 return@animate
 
@@ -93,9 +102,9 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
             view.translationY = startValue
 
-            configureAnimator(view.animate()?.translationY(endValue))
+            configureAnimator(view.animate()?.translationY(endValue), duration)
         }
-        val alphaAnimation = animate@{ view: View? ->
+        val alphaAnimation = animate@{ view: View?, duration: Long ->
 
             if (view == null)
                 return@animate
@@ -105,14 +114,18 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
             view.alpha = startValue
 
-            configureAnimator(view.animate()?.alpha(endValue))
+            configureAnimator(view.animate()?.alpha(endValue), duration)
         }
 
-        for ((view, position) in animation.animatedViews) {
-            when (position) {
-                AnimationType.SlideFromTop -> slideFromTop(view)
-                AnimationType.SlideFromBottom -> slideFromBottom(view)
-                AnimationType.AlphaAnimation -> alphaAnimation(view)
+        for ((view, animationType) in animation.animatedViews) {
+            val duration =
+                durations?.get(animationType)
+                    ?: animation.defaultAnimationsDurations[animationType]
+                    ?: 0L
+            when (animationType) {
+                AnimationType.SlideFromTop -> slideFromTop(view, duration)
+                AnimationType.SlideFromBottom -> slideFromBottom(view, duration)
+                AnimationType.AlphaAnimation -> alphaAnimation(view, duration)
                 null -> {}
             }
         }
@@ -150,7 +163,7 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
         if (!animation.animateOnBackButton)
             return false
 
-        animateVisibility(false, 175) {
+        animateVisibility(false) {
             handleBackButtonEventAfterAnimation()
         }
         return true
