@@ -50,6 +50,8 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
         val bottomFixedOffset = animation.countBottomSlideFixedOffset?.invoke()
         val topFixedOffset = animation.countTopSlideFixedOffset?.invoke()
 
+        val longestAnimation = getLongestAnimation(durations)
+
         val configureAnimator = {
                 animator: ViewPropertyAnimator?,
                 duration: Long ->
@@ -58,7 +60,7 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
 
                 this.duration = duration
 
-                if (!endActionAttached) {
+                if (!endActionAttached && duration >= longestAnimation) {
                     withEndAction(endAction)
                     endActionAttached = true
                 }
@@ -129,6 +131,25 @@ abstract class AnimatedFragment : Fragment(), BackButtonListener {
                 null -> {}
             }
         }
+    }
+
+    private fun getLongestAnimation(paramDurations: Map<AnimationType, Long>?): Long {
+
+        val presentTypes = AnimationType.values().filter {
+            animation.animatedViews.containsValue(it)
+        }
+        var longestAnimation = paramDurations?.filter {
+            presentTypes.contains(it.key)
+        }?.maxBy { it.value }?.value
+
+        val longestDefaultAnimation = animation.defaultAnimationsDurations.filter {
+            presentTypes.contains(it.key)
+        }.maxBy { it.value }?.value
+
+        if (longestAnimation == null || longestDefaultAnimation ?: 0 > longestAnimation)
+            longestAnimation = longestDefaultAnimation ?: 0
+
+        return longestAnimation
     }
 
     override fun onResume() {
